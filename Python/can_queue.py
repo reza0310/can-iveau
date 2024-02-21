@@ -40,6 +40,6 @@ class can_queue(SimpleQueue):
     def has_lost_data(self) -> bool:
         return self.has_lost_data
 
-    def stop(self) -> None:
-        pass  # Seulement là à des fins de compatibilité.
+    def stop(self) -> bool:
+        return True  # Seulement là à des fins de compatibilité.
 

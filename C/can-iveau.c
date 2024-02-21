@@ -31,7 +31,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan) {
 		Data.data += RxRawData[i];
 	}
 
-	queueAdd(&MANAGER->mainQueue, Data);  // On récupère l'erreur ou on s'en fout ?
+	queueAdd(&MANAGER->queue, Data);  // On récupère l'erreur ou on s'en fout ?
 }
 
 // ---------- END INTERRUPT FUNCTIONS ----------
@@ -104,7 +104,7 @@ HAL_StatusTypeDef caniveauStart(canManager_t* manager, CAN_HandleTypeDef* hcan, 
 	manager->boardType = board_type;
 	manager->boardId = board_id;
 	caniveauGenerateFilters(manager);
-	queueNew(&manager->mainQueue, mailbox_size, true);
+	queueNew(&manager->queue, mailbox_size, true);
 
 	setReceivingManager(manager);
 
@@ -159,37 +159,33 @@ HAL_StatusTypeDef caniveauSendParsedChecked(canManager_t* manager, uint8_t prior
 	return caniveauSendParsed(manager, priority, message_type, message_id, board_type, board_id, tracking, data);
 }
 
-HAL_StatusTypeDef getRawFromQueueCAN(canManager_t* manager, canData_t* data) {
-	return queuePop(&manager->mainQueue, data);
+HAL_StatusTypeDef caniveauReceiveRaw(canManager_t* manager, canData_t* data) {
+	return queuePop(&manager->queue, data);
 }
 
-HAL_StatusTypeDef getParsedFromQueueCAN(canManager_t* manager, uint8_t* priority, uint8_t* message_type, uint8_t* message_id, uint8_t* board_type, uint8_t* board_id, uint8_t* tracking, uint64_t* data) {
+HAL_StatusTypeDef caniveauReceiveParsed(canManager_t* manager, uint8_t* priority, uint8_t* message_type, uint8_t* message_id, uint8_t* board_type, uint8_t* board_id, uint8_t* tracking, uint64_t* data) {
 	canData_t pop_data;
-	if (queuePop(&manager->mainQueue, &pop_data) != HAL_OK)
+	if (caniveauReceiveRaw(manager, &pop_data) != HAL_OK)
 	{
 		return HAL_ERROR;
 	}
-
 	*tracking = pop_data.header&0x7F;
 	pop_data.header >>= 7;
-
 	*board_id = pop_data.header&0x1F;
 	pop_data.header >>= 5;
-
 	*board_type = pop_data.header&0x1F;
 	pop_data.header >>= 5;
-
 	*message_id = pop_data.header&0xFF;
 	pop_data.header >>= 8;
-
 	*message_type = pop_data.header&0x3;
 	pop_data.header >>= 2;
-
 	*priority = pop_data.header&0x3;
-
 	*data = pop_data.data;
-	printf("Confirming data: %llX\r\n", *data);
 	return HAL_OK;
+}
+
+HAL_StatusTypeDef caniveauStop(canManager_t* manager) {
+	return queueStop(&manager->queue);
 }
 
 // ---------- START PRIVATE FUNCTIONS ----------

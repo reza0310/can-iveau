@@ -37,6 +37,6 @@ HAL_StatusTypeDef queueAdd(canMessageQueue_t* queue, canData_t element);
 HAL_StatusTypeDef queuePop(canMessageQueue_t* queue, canData_t* data);
 uint8_t queueLength(canMessageQueue_t* queue);
 bool queueHasLostData(canMessageQueue_t* queue);
-void queueStop(canMessageQueue_t* queue);
+HAL_StatusTypeDef queueStop(canMessageQueue_t* queue);
 
 #endif // QUEUE_H

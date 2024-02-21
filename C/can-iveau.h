@@ -17,7 +17,7 @@ typedef struct __packed canManager_s {
 	CAN_HandleTypeDef* hcan;
 	uint8_t boardType;
 	uint8_t boardId;
-	canMessageQueue_t mainQueue;  // J'en ai fait un pointeur car c'est ce que prennent les fonctions de queue en argument.
+	canMessageQueue_t queue;  // J'en ai fait un pointeur car c'est ce que prennent les fonctions de queue en argument.
 } canManager_t;
 
 void setReceivingManager(canManager_t* manager);
@@ -29,8 +29,9 @@ HAL_StatusTypeDef caniveauGenerateFilters(canManager_t* manager);
 HAL_StatusTypeDef caniveauSendRaw(canManager_t* manager, uint32_t header, uint64_t data);
 HAL_StatusTypeDef caniveauSendParsed(canManager_t* manager, uint8_t priority, uint8_t message_type, uint8_t message_id, uint8_t board_type, uint8_t board_id, uint8_t tracking, uint64_t data);
 HAL_StatusTypeDef caniveauSendParsedChecked(canManager_t* manager, uint8_t priority, uint8_t message_type, uint8_t message_id, uint8_t board_type, uint8_t board_id, uint8_t tracking, uint64_t data);
-HAL_StatusTypeDef getRawFromQueueCAN(canManager_t* manager, canData_t* data);  // Pour la lecture
-HAL_StatusTypeDef getParsedFromQueueCAN(canManager_t* manager, uint8_t* tracking, uint8_t* board_id, uint8_t* board_type, uint8_t* message_id, uint8_t* message_type, uint8_t* priority, uint64_t* data);
+HAL_StatusTypeDef caniveauReceiveRaw(canManager_t* manager, canData_t* data);  // Pour la lecture
+HAL_StatusTypeDef caniveauReceiveParsed(canManager_t* manager, uint8_t* priority, uint8_t* message_type, uint8_t* message_id, uint8_t* board_type, uint8_t* board_id, uint8_t* tracking, uint64_t* data);
+HAL_StatusTypeDef caniveauStop(canManager_t* manager);
 
 // ATTENTION MAUVAIS ID ET DATA AU PREMIER MSG APRES RESET
 // VERIFIER DATA RECU

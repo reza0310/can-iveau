@@ -54,8 +54,9 @@ bool queueHasLostData(canMessageQueue_t* queue) {
 	return queue->hasLostData;
 }
 
-void queueStop(canMessageQueue_t* queue) {
+HAL_StatusTypeDef queueStop(canMessageQueue_t* queue) {
 	free(queue->data);
+	return HAL_OK;
 }
 
 // ---------- END QUEUE FUNCTIONS ----------

@@ -6,36 +6,35 @@ from can_queue import can_queue, can_data
 from typing import List, Tuple
 
 
-def hex(entier):
-    return f'{entier:X}'
-
-
 def gather(receiver):  # Prends une instance de Caniveau et ne renvoie rien
-    while not receiver.finished.is_set():
-        msg = receiver.bus.recv(timeout=0.1)  # Bloquant si on retire le timeout
-        if msg:  # Quand on a un msg reçu
-            if msg.is_rx:  # Si c'est pas nous qui l'avons envoyé
-                data = []
-                for i in range(8):
-                    data.append(int(msg.data&0xFF))
-                    msg.data >>= 8
-                receiver.queue.add(can_data(msg.arbitration_id, data))
-    dump.kill()
-
+    print(receiver.bus.recv().data)
+    """while not receiver.finished.is_set():
+        receiver.bus_lock.acquire()
+        msg = b.recv()
+        #msg = receiver.bus.recv(timeout=0.1)  # Bloquant si on retire le timeout
+        #if msg:  # Quand on a un msg reçu
+        if msg.is_rx:  # Si c'est pas nous qui l'avons envoyé
+            data = []
+            for i in range(8):
+                data.append(int(msg.data&0xFF))
+                msg.data >>= 8
+            receiver.queue.add(can_data(msg.arbitration_id, data))"""
+        #receiver.bus_lock.release()
 
 class Caniveau():
     def __init__(self, bus: str, board_type: int, board_id: int, mailbox_size: int) -> None:
-        self.bus = can.Bus(interface="socketcan", channel=bus, butrate=500000)
+        self.bus = can.Bus(interface="socketcan", channel=bus, bitrate=500000)
         self.board_type = board_type
         self.board_id = board_id
         self.mailbox_size = mailbox_size
+        self.bus_lock = threading.Lock()
 
         # Verification de la configuration
         if "not found" in subprocess.run(["candump", "-h"], capture_output=True, text=True).stdout:
             raise Exception("can-utils isn't installed !")
         if "not found" in subprocess.run(["ifconfig", "-h"], capture_output=True, text=True).stdout:
             raise Exception("net-tools isn't installed !")
-        if "not found" in subprocess.run(["ifconfig", self.bus], capture_output=True, text=True).stdout:
+        if "not found" in subprocess.run(["ifconfig", bus], capture_output=True, text=True).stdout:
             raise Exception(bus+" isn't set up properly !")
 
         # Mise en place des masques
@@ -49,7 +48,7 @@ class Caniveau():
         # Mise en place de la réception
         self.finished = threading.Event()
         self.gatherer = threading.Thread(target=gather, args=(self,))
-        self.gatherer.start()
+        #self.gatherer.start()
 
     def add_filter(self, filter_num: int, filter_id: int, filter_mask: int) -> bool:
         filter_id_str = hex(filter_id)
@@ -64,8 +63,7 @@ class Caniveau():
         return out and self.add_filter(1, (self.board_type << 12) + (self.board_id << 7), 0b00000000000011111111110000000)
 
     def send_raw(self, header: int, data: List[int]) -> bool:
-        with self.bus as b:
-            b.send(can.Message(arbitration_id=header, data=data, is_extended=True))
+        self.bus.send(can.Message(arbitration_id=header, data=data, is_extended_id=True))
         return True
 
     def send_parsed(self, priority: int, message_type: int, message_id: int, board_type: int, board_id: int, tracking: int, data: List[int]) -> bool:
@@ -126,6 +124,7 @@ class Caniveau():
     def stop(self) -> bool:
         self.finished.set()
         self.queue.stop()
+        self.bus.shutdown()
         self.gatherer.join()
         return True
 

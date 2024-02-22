@@ -1,12 +1,13 @@
 import time
-from caniveau import Caniveau, hex
+from caniveau import Caniveau
 
 
 TIME = 100
 caniveau = Caniveau("can-iveau", 1, 1, 1000)
 start = time.time()
 counter = 0
-caniveau.send_parsed_checked(0, 1, 42, 3, 0, 42, "DEADBEEFDEADBEEF")
+caniveau.send_parsed_checked(0, 1, 42, 3, 0, 42, [0xDE, 0xAD, 0xBE, 0xEF, 0xDE, 0xAD, 0xBE, 0xEF])
+caniveau.stop()
 """while time.time()-start < TIME:
     x = caniveau.receive_parsed()
     while not x[7]:

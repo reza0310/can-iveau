@@ -1,8 +1,9 @@
 import subprocess
 import threading
 import os
+import can
 from can_queue import can_queue, can_data
-from typing import Tuple
+from typing import List, Tuple
 
 
 def hex(entier):
@@ -10,20 +11,21 @@ def hex(entier):
 
 
 def gather(receiver):  # Prends une instance de Caniveau et ne renvoie rien
-    dump = subprocess.Popen(["candump", "-x", "-t", "A", receiver.bus+","+",".join(receiver.filters)], stdout=subprocess.PIPE, text=True)
-    os.set_blocking(dump.stdout.fileno(), False)
     while not receiver.finished.is_set():
-        msg = dump.stdout.readline()  # Bloquant si on retire le set_blocking au dessus
+        msg = receiver.bus.recv(timeout=0.1)  # Bloquant si on retire le timeout
         if msg:  # Quand on a un msg reçu
-            x = msg.split("  ")
-            if not x[2].startswith("TX"):  # Si c'est pas nous qui l'avons envoyé
-                receiver.queue.add(can_data(x[3], x[5].strip().replace(" ", "")))
+            if msg.is_rx:  # Si c'est pas nous qui l'avons envoyé
+                data = []
+                for i in range(8):
+                    data.append(int(msg.data&0xFF))
+                    msg.data >>= 8
+                receiver.queue.add(can_data(msg.arbitration_id, data))
     dump.kill()
 
 
 class Caniveau():
     def __init__(self, bus: str, board_type: int, board_id: int, mailbox_size: int) -> None:
-        self.bus = bus
+        self.bus = can.Bus(interface="socketcan", channel=bus, butrate=500000)
         self.board_type = board_type
         self.board_id = board_id
         self.mailbox_size = mailbox_size
@@ -61,11 +63,12 @@ class Caniveau():
         out =  out and self.add_filter(1, self.board_type << 12,                          0b00000000000011111111110000000)
         return out and self.add_filter(1, (self.board_type << 12) + (self.board_id << 7), 0b00000000000011111111110000000)
 
-    def send_raw(self, header: str, data: str) -> bool:
-        subprocess.run(["cansend", self.bus, header+"#"+data])
+    def send_raw(self, header: int, data: List[int]) -> bool:
+        with self.bus as b:
+            b.send(can.Message(arbitration_id=header, data=data, is_extended=True))
         return True
 
-    def send_parsed(self, priority: int, message_type: int, message_id: int, board_type: int, board_id: int, tracking: int, data: str) -> bool:
+    def send_parsed(self, priority: int, message_type: int, message_id: int, board_type: int, board_id: int, tracking: int, data: List[int]) -> bool:
         header = 0
 
         header += priority
@@ -80,9 +83,9 @@ class Caniveau():
         header <<= 5
         header += tracking
 
-        return self.send_raw(hex(header).zfill(8), data)
+        return self.send_raw(header, data)
     
-    def send_parsed_checked(self, priority: int, message_type: int, message_id: int, board_type: int, board_id: int, tracking: int, data: str) -> bool:
+    def send_parsed_checked(self, priority: int, message_type: int, message_id: int, board_type: int, board_id: int, tracking: int, data: List[int]) -> bool:
         if priority < 0 or priority > 3:
             return False
         if message_type < 0 or message_type > 3:
@@ -100,7 +103,7 @@ class Caniveau():
     def receive_raw(self) -> Tuple[can_data, bool]:
         return self.queue.pop()
 
-    def receive_parsed(self) -> Tuple[int, int, int, int, int, int, str, bool]:
+    def receive_parsed(self) -> Tuple[int, int, int, int, int, int, List[int], bool]:
         data, check = self.receive_raw()
         if not check:
             return 0, 0, 0, 0, 0, 0, "", False

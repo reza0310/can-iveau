@@ -1,8 +1,8 @@
 from queue import SimpleQueue, Full, Empty
-from typing import Tuple
+from typing import Tuple, List
 
 class can_data():
-    def __init__(self, header: str, data: str) -> None:
+    def __init__(self, header: int, data: List[int]) -> None:
         self.header = header
         self.data = data
 

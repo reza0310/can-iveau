@@ -7,23 +7,17 @@ from typing import List, Tuple
 
 
 def gather(receiver):  # Prends une instance de Caniveau et ne renvoie rien
-    print(receiver.bus.recv().data)
-    """while not receiver.finished.is_set():
+    while not receiver.finished.is_set():
         receiver.bus_lock.acquire()
-        msg = b.recv()
-        #msg = receiver.bus.recv(timeout=0.1)  # Bloquant si on retire le timeout
-        #if msg:  # Quand on a un msg reçu
-        if msg.is_rx:  # Si c'est pas nous qui l'avons envoyé
-            data = []
-            for i in range(8):
-                data.append(int(msg.data&0xFF))
-                msg.data >>= 8
-            receiver.queue.add(can_data(msg.arbitration_id, data))"""
-        #receiver.bus_lock.release()
+        msg = receiver.bus.recv(timeout=0.1)  # Bloquant si on retire le timeout
+        receiver.bus_lock.release()
+        if msg:  # Quand on a un msg reçu
+            data = [x for x in msg.data]  # Utilisation des compréhensions de liste pour changer une liste d'octets en liste d'entiers en bas niveau
+            receiver.queue.add(can_data(int(msg.arbitration_id), data))
 
 class Caniveau():
     def __init__(self, bus: str, board_type: int, board_id: int, mailbox_size: int) -> None:
-        self.bus = can.Bus(interface="socketcan", channel=bus, bitrate=500000)
+        self.bus = can.Bus(interface="socketcan", bitrate=500000, channel=bus)
         self.board_type = board_type
         self.board_id = board_id
         self.mailbox_size = mailbox_size
@@ -39,7 +33,6 @@ class Caniveau():
 
         # Mise en place des masques
         self.filters = []
-        self.filters_numerotation = {}
         self.generate_filters()
 
         # Mise en place de la file de réception
@@ -48,13 +41,11 @@ class Caniveau():
         # Mise en place de la réception
         self.finished = threading.Event()
         self.gatherer = threading.Thread(target=gather, args=(self,))
-        #self.gatherer.start()
+        self.gatherer.start()
 
     def add_filter(self, filter_num: int, filter_id: int, filter_mask: int) -> bool:
-        filter_id_str = hex(filter_id)
-        filter_mask_str = hex(filter_mask)
-        self.filters.append(filter_id_str+":"+filter_mask_str)
-        self.filters_numerotation[filter_num] = len(self.filters)-1
+        self.filters.append({"can_id": filter_id, "can_mask": filter_mask, "extended": True})
+        self.bus.set_filters(self.filters)
         return True
 
     def generate_filters(self) -> bool:
@@ -69,16 +60,17 @@ class Caniveau():
     def send_parsed(self, priority: int, message_type: int, message_id: int, board_type: int, board_id: int, tracking: int, data: List[int]) -> bool:
         header = 0
 
+        #header <<= 2  Commenté car inutile mais sert à comprendre
         header += priority
         header <<= 2
         header += message_type
-        header <<= 2
-        header += message_id
         header <<= 8
+        header += message_id
+        header <<= 5
         header += board_type
         header <<= 5
         header += board_id
-        header <<= 5
+        header <<= 7
         header += tracking
 
         return self.send_raw(header, data)
@@ -106,7 +98,7 @@ class Caniveau():
         if not check:
             return 0, 0, 0, 0, 0, 0, "", False
         
-        header = int(data.header, 16)
+        header = data.header
         tracking = header&0x7F
         header >>= 7
         board_id = header&0x1F
@@ -124,7 +116,7 @@ class Caniveau():
     def stop(self) -> bool:
         self.finished.set()
         self.queue.stop()
-        self.bus.shutdown()
         self.gatherer.join()
+        self.bus.shutdown()
         return True
 

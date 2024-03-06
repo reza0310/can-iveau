@@ -22,7 +22,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan) {
 	if (HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &RxHeader, RxRawData) != HAL_OK) {  // Si ça retourne un statut différent de OK on est dans la merde
 		Error_Handler();
 	}
-	printf("Received data: %X.%X.%X.%X.%X.%X.%X.%X\r\n", RxRawData[0], RxRawData[1], RxRawData[2], RxRawData[3], RxRawData[4], RxRawData[5], RxRawData[6], RxRawData[7]);
+	//printf("Received data: %X.%X.%X.%X.%X.%X.%X.%X\r\n", RxRawData[0], RxRawData[1], RxRawData[2], RxRawData[3], RxRawData[4], RxRawData[5], RxRawData[6], RxRawData[7]);
 	Data.header = RxHeader.ExtId;
 
 	Data.data = RxRawData[0];
@@ -125,7 +125,7 @@ HAL_StatusTypeDef caniveauSendRaw(canManager_t* manager, uint32_t header, uint64
 		data >>= 8;
 	}
 
-	printf("Sending data: %X.%X.%X.%X.%X.%X.%X.%X\r\n", tx_data[0], tx_data[1], tx_data[2], tx_data[3], tx_data[4], tx_data[5], tx_data[6], tx_data[7]);
+	//printf("Sending data: 0x%X.0x%X.0x%X.0x%X.0x%X.0x%X.0x%X.0x%X\r\n", tx_data[0], tx_data[1], tx_data[2], tx_data[3], tx_data[4], tx_data[5], tx_data[6], tx_data[7]);
 	HAL_CAN_AddTxMessage(manager->hcan, &tx_header, tx_data, &tx_mailbox);
 	return HAL_OK;
 }
@@ -133,16 +133,17 @@ HAL_StatusTypeDef caniveauSendRaw(canManager_t* manager, uint32_t header, uint64
 HAL_StatusTypeDef caniveauSendParsed(canManager_t* manager, uint8_t priority, uint8_t message_type, uint8_t message_id, uint8_t board_type, uint8_t board_id, uint8_t tracking, uint64_t data) {
 	uint32_t header = 0;
 
+	//header <<= 2;  Commenté car techniquement inutile mais sert à comprendre
 	header += priority;
 	header <<= 2;
 	header += message_type;
-	header <<= 2;
-	header += message_id;
 	header <<= 8;
+	header += message_id;
+	header <<= 5;
 	header += board_type;
 	header <<= 5;
 	header += board_id;
-	header <<= 5;
+	header <<= 7;
 	header += tracking;
 
 	return caniveauSendRaw(manager, header, data);
@@ -181,6 +182,7 @@ HAL_StatusTypeDef caniveauReceiveParsed(canManager_t* manager, uint8_t* priority
 	pop_data.header >>= 2;
 	*priority = pop_data.header&0x3;
 	*data = pop_data.data;
+
 	return HAL_OK;
 }
 
